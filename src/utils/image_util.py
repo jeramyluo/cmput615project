@@ -1,10 +1,7 @@
 #TODO: Develop image utility functions 
-from collections.abc import Callable
-from tracemalloc import start 
-
 import cv2
-from matplotlib.style import use 
 import numpy as np 
+from cv_bridge import CvBridgeError
 
 from uvs.kinova_controller import RGBDCamera 
 
