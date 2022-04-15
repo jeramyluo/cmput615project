@@ -3,7 +3,7 @@ import cv2
 import numpy as np 
 
 class Tracker(object): 
-    """Holds methods or attributes related to tracking algorithm. 
+    """Holds methods and attributes related to tracking algorithm. 
 
     Attributes: 
     ----------
@@ -24,11 +24,17 @@ class Tracker(object):
         ---------- 
         img: np.ndarray 
             Image to use for registering point(s) to track.
+        window_name: str 
+            Name of the window to show the plot. 
 
         Returns
         ----------
         points: np.ndarray 
             Spatial 2D coordinates in image to track. 
+        
+        I/O: 
+        ----------
+        Take in the initial image or arbitrary size. 
         """
         global res 
         res = []
@@ -70,6 +76,10 @@ class Tracker(object):
         ----------
         img: np.ndarray 
             First frame of video. 
+
+        I/O 
+        ----------
+        Take in a single image in gray scale. 
         """
         # globalize variables 
         self.prev_frame = img.copy()
@@ -81,7 +91,15 @@ class Tracker(object):
         ----------
         img: np.ndarray 
             Frame for updated view. 
+        
+        I/O
+        ----------
+        Take in a single gray scale image, which is in the same shape as in self.prev_frame.
         """
+        # check if image is in gray scale or not 
+        if len(img.shape) > 2: 
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) 
+
         lk_params = dict(winSize=(32, 32), 
                         maxLevel=8, 
                         criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 9, 0.02555))
@@ -95,15 +113,19 @@ def draw_points(img: np.ndarray, points: np.ndarray, color: tuple=(0, 255, 0), r
     Parameters: 
     ----------
     img: np.ndarray 
-        Image to draw on.
+        Arbitrary sized image to draw on.
     points: np.ndarray 
-        Coordinates of circles. 
+        Pixel coordinates to draw circles. 
     color: tuple 
-        Color code of the arrows. 
+        Color code of the points, represented as (B, G, R) where each elements are the in the integer between 0 ~ 255. 
     radius: int
-        Radius of each circle. 
+        Radius of each circle in pixel scale. 
     thickness: int 
-        Value of integer which specifies thickness of arrows. 
+        Value of integer which specifies thickness of circles. 
+
+    I/O
+    ----------
+    Takes in parameters above, then return nothing. 
     """
     if (points.shape[-1] != 2): 
         raise ValueError("Coordinates of tracking points must be in the shape of (n, 2), where n is the number of points.")
@@ -119,13 +141,13 @@ def draw_arrows(img: np.ndarray, start_pts: np.ndarray, end_pts: np.ndarray, col
     Parameters: 
     ----------
     img: np.ndarray 
-        Image to draw on.
+        Arbitrary sized image to draw on. 
     start_pts: np.ndarray 
-        Start coordinates of arrows. 
+        Start coordinates of arrows, where each pixel scale coordinates are in tuple (x, y). 
     end_pts: np.ndarray 
-        End (tips) coordinates of arrows. 
+        End (tips) coordinates of arrows, where each pixel scale coordinates are in tuple (x, y) and each corresponds to start_pts.
     color: tuple 
-        Color code of the arrows. 
+        Color code of the points, represented as (B, G, R) where each elements are the in the integer between 0 ~ 255. 
     thickness: int 
         Value of integer which specifies thickness of arrows. 
     """ 
@@ -149,16 +171,24 @@ def get_angles(ray: np.ndarray, to_degree: bool = True):
     Parameters: 
     ----------
     ray: np.ndarray 
-        Direction vector of ray from center of image. 
+        Direction vector of ray from center of image, with shape (1x3) or (3, ). 
+        Vector must be in (x, y, z) where: 
+            x: horizontal direction on image plane. 
+            y: vertical direction on image plane. 
+            z: principal axis.
     to_degree: bool 
         Decide whether to convert from radian to degree. 
 
     Returns: 
     ----------
     x_ang: float
-        Angle in xy direction 
+        Angle in xy direction, equivalent to rotation of ray on image plane.  
     z_ang: float 
-        Angle in z direciton 
+        Angle in z direciton, equivalent rotation of ray from principal axis.  
+
+    I/O
+    -----------
+    Takes in (3, 1), (1x3) or (3,) shaped vector then return two floating point numbers as specified in Returns section. 
     """
     x, y, z = ray 
     xy_norm = np.linalg.norm(ray[:2])
