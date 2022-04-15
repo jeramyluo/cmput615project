@@ -1,20 +1,6 @@
 #TODO: Develop image utility functions 
 import cv2
 import numpy as np 
-from cv_bridge import CvBridgeError
-
-from uvs.kinova_controller import RGBDCamera 
-
-class CapturedCam(RGBDCamera): 
-    def __init__(self):
-        super().__init__()
-
-    def _image_callback(self, ros_image):
-        try: 
-            frame = self.bridge.imgmsg_to_cv2(ros_image, "mono8")
-        except CvBridgeError as e: 
-            print(e)
-        self.frame = np.array(frame, dtype=np.uint8)
 
 class Tracker(object): 
     """Holds methods or attributes related to tracking algorithm. 
@@ -52,7 +38,7 @@ class Tracker(object):
             # store and show the clicked coordinates when left click on mouse happens 
             if event == cv2.EVENT_LBUTTONDOWN: 
                 res.append([x, y]) 
-            cv2.circle(img, (x, y), 3, (0, 255, 0), 2)
+                cv2.circle(img, (x, y), 3, (0, 255, 0), 2)
 
         # initialize opencv window
         if window_name is None: 
@@ -72,6 +58,10 @@ class Tracker(object):
         points = np.asarray(points, dtype=np.float32) 
         cv2.destroyAllWindows()
         self.points = points 
+        
+        if len(img.shape) > 2: 
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) 
+        self.init_tracker(img) 
 
     def init_tracker(self, img: np.ndarray): 
         """Initialize tracker with first frame. 
@@ -123,7 +113,7 @@ def draw_points(img: np.ndarray, points: np.ndarray, color: tuple=(0, 255, 0), r
         x, y = int(points[i, 0]), int(points[i, 1])
         cv2.circle(img, (x, y), radius=radius, color=color, thickness=thickness)
 
-def draw_arrows(img: np.ndarray, start_pts: np.ndarry, end_pts: np.ndarray, color: tuple=(0, 0, 255), thickness: int=5): 
+def draw_arrows(img: np.ndarray, start_pts: np.ndarray, end_pts: np.ndarray, color: tuple=(0, 0, 255), thickness: int=5): 
     """Draw arrows on the image.
     
     Parameters: 
@@ -144,6 +134,41 @@ def draw_arrows(img: np.ndarray, start_pts: np.ndarry, end_pts: np.ndarray, colo
     if (start_pts.shape != end_pts.shape): 
         raise ValueError("Starting points and end points must have the exactly same shape. Instead got {0} and {1}".format(start_pts.shape, end_pts.shape))
     
+    # avoid dimension error by checking the shape (i.e. avoid shape of (2, )) 
+    if len(start_pts.shape) == 1: 
+        start_pts = np.expand_dims(start_pts, axis=0) 
+    if len(end_pts.shape) == 1: 
+        end_pts = np.expand_dims(end_pts, axis=0) 
+
     for i in range(start_pts.shape[0]): 
-        cv2.arrowedLine(img, start_pts[i, :], end_pts[i, :], color=color, thickness=thickness)
+        cv2.arrowedLine(img, start_pts[i, :].astype(int), end_pts[i, :].astype(int), color=color, thickness=thickness)
     
+def get_angles(ray: np.ndarray, to_degree: bool = True): 
+    """Compute angles in both x, y directions with respect to principal axis (i.e. axis perpendicular to image plane). 
+
+    Parameters: 
+    ----------
+    ray: np.ndarray 
+        Direction vector of ray from center of image. 
+    to_degree: bool 
+        Decide whether to convert from radian to degree. 
+
+    Returns: 
+    ----------
+    x_ang: float
+        Angle in xy direction 
+    z_ang: float 
+        Angle in z direciton 
+    """
+    x, y, z = ray 
+    xy_norm = np.linalg.norm(ray[:2])
+    x_ang = np.arccos(x/xy_norm)
+    x_ang *= -1 if y > 0 else 1 
+    z_ang = np.pi/2 - np.arctan(z/xy_norm) 
+
+    if to_degree: 
+        x_ang *= 180 / np.math.pi 
+        z_ang *= 180 / np.math.pi 
+    
+    return x_ang, z_ang 
+
