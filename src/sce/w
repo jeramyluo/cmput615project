@@ -85,8 +85,8 @@ class Odometry(object):
         self, 
         init_img: np.ndarray, 
         focal_len: float, 
-        cam_center: np.ndarray, 
-        min_features: int = 50, 
+        cam_center: tuple, 
+        min_features: int = 2000, 
         lk_params: dict = dict(winSize=(32, 32), maxLevel=8, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 9, 0.02555)), 
         detector: cv2.FastFeatureDetector = cv2.FastFeatureDetector_create(threshold=25, nonmaxSuppression=True)
     ): 
@@ -119,7 +119,7 @@ class Odometry(object):
         
     def _detect(self, img: np.ndarray): 
         # detect the feature points 
-        fp = self.detector.detect(img)
+        fp = self.detector.detect(self.img)
         return np.array([x.pt for x in fp], dtype=np.float32).reshape(-1, 1, 2)
     
     def compute_odometry(self, img: np.ndarray): 
@@ -134,14 +134,14 @@ class Odometry(object):
 
         # extract features 
         if self.n_features < self.min_features: 
-            self.p0 = self._detect(self.prev_frame) 
+            self.p0 = self.detector(self.pre_frame) 
         
         # compute optical flow 
         p1, status, error = cv2.calcOpticalFlowPyrLK(self.prev_frame, img, self.p0, None, **self.lk_params)
 
         # extract the effective feature points from p0 and computed p1 
-        p0_extracted = np.expand_dims(self.p0[status == 1], axis=1) 
-        p1_extracted = np.expand_dims(p1[status == 1], axis=1) 
+        p0_extracted = self.p0[status == 1]
+        p1_extracted = p1[status == 1]
 
         # compute essential matrix and extrinsic parameters 
         E, _ = cv2.findEssentialMat(p1_extracted, 
@@ -152,21 +152,20 @@ class Odometry(object):
                                     0.999, 
                                     1.0, 
                                     None) 
-
-        # compute rotation matrix and translation vector 
+        # compute rotational matrix and translation vector 
         _, self.R, self.t, _ = cv2.recoverPose(E, 
-                                            p1_extracted, 
                                             p0_extracted, 
-                                            R=self.R, t=self.t, 
-                                            focal=self.focal_len, 
-                                            pp=self.cam_center, 
-                                            mask=None) 
+                                            p1_extracted, 
+                                            self.R, self.t, 
+                                            self.focal_len, 
+                                            self.cam_center, 
+                                            None)
         
         # Update number of extracted features 
         self.n_features = p1_extracted.shape[0]
         # update camera matrix and related matrices 
         self.Rt[:, :3] = self.R 
-        self.Rt[:, 3] = self.t[:, 0]  
+        self.Rt[:, 3] = self.t 
         self.P = self.K @ self.Rt
 
 if __name__ == "__main__": 
@@ -183,52 +182,7 @@ if __name__ == "__main__":
     OUT_PATH = "../../data/test_vid/odometer_test_out.mp4" 
     WINDOW_NAME = "Test"
 
-    # read video and configure the image  
+    # read image video 
     vid = cv2.VideoCapture(VID_PATH) 
     
-    success, img = vid.read()
-    if not success: 
-        raise Exception("Video not loaded successfully.") 
-    size = (int(img.shape[1] * 0.5), int(img.shape[0] * 0.5)) 
-    out = cv2.VideoWriter(OUT_PATH, -1, 20.0, size) 
-    img = cv2.resize(img, size, interpolation=cv2.INTER_AREA) 
-    center = ((img.shape[1]-1)//2+1, (img.shape[0]-1)//2+1)
-    center = np.array(center, dtype=float) 
-
-    # initialize tracker 
-    tracker = Tracker() 
-    tracker.register_points(img, WINDOW_NAME) 
-
-    # initialize odometer 
-    odom = Odometry(img, FOCAL, center) 
-    
-    cnt = 0
-    orig_coord = None 
-    while success: 
-        # read next frame 
-        success, img = vid.read() 
-        if not success: 
-            break 
-        img = cv2.resize(img, size, interpolation=cv2.INTER_AREA) 
-
-        # update tracker and odometry 
-        tracker.update_tracker(img) 
-        odom.compute_odometry(img) 
-        
-        if cnt == 0: 
-            # compute the original estimated 3D point of the tracker 
-            Pplus = np.linalg.pinv(odom.P) 
-            homogenous_pix = np.ones((3, 1)) 
-            homogenous_pix[:2, :] = tracker.points.T 
-            orig_coord = (Pplus @ homogenous_pix).T
-            print(orig_coord) 
-
-        # compute ray 
-        draw_points(img, tracker.points) 
-        cv2.imshow("WINDOW_NAME", img) 
-        cv2.waitKey(1) 
-        cnt += 1 
-
-    vid.release() 
-    out.release() 
-    cv2.destroyAllWindows() 
+    # initialize odometer
