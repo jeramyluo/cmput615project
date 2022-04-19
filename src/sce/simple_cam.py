@@ -66,7 +66,7 @@ def get_intrinsics_from_checker(img_dir: str, board_dims: tuple=(7, 6)):
             ##### Plot for debug purpose #####
             cv2.drawChessboardCorners(img, board_dims, refined_corners, ret) 
             cv2.imshow("test", img) 
-            cv2.watiKey(0) 
+            cv2.waitKey(0) 
         
     cv2.destroyAllWindows() 
 
@@ -86,7 +86,7 @@ class Odometry(object):
         init_img: np.ndarray, 
         focal_len: float, 
         cam_center: np.ndarray, 
-        min_features: int = 50, 
+        min_features: int = 100, 
         lk_params: dict = dict(winSize=(32, 32), maxLevel=8, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 9, 0.02555)), 
         detector: cv2.FastFeatureDetector = cv2.FastFeatureDetector_create(threshold=25, nonmaxSuppression=True)
     ): 
@@ -152,20 +152,20 @@ class Odometry(object):
                                     0.999, 
                                     1.0, 
                                     None) 
-
+        
         # compute rotation matrix and translation vector 
         _, self.R, self.t, _ = cv2.recoverPose(E, 
-                                            p1_extracted, 
                                             p0_extracted, 
+                                            p1_extracted, 
                                             R=self.R, t=self.t, 
                                             focal=self.focal_len, 
                                             pp=self.cam_center, 
                                             mask=None) 
         
+        # print(self.R, self.t) 
         # Update number of extracted features 
         self.n_features = p1_extracted.shape[0]
         # update camera matrix and related matrices 
         self.Rt[:, :3] = self.R 
         self.Rt[:, 3] = self.t[:, 0]  
         self.P = self.K @ self.Rt
-
