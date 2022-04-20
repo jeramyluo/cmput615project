@@ -1,7 +1,7 @@
 import cv2 
 import numpy as np 
 
-from sce import Odometry 
+from sce import Odometry, estimate_ray_with_proj
 from utils import Tracker, draw_points, draw_arrows, get_angles  
 
 if __name__ == "__main__": 
@@ -44,43 +44,21 @@ if __name__ == "__main__":
 
         # update tracker and odometry 
         tracker.update_tracker(img) 
-        odom.compute_odometry(img) 
-        
-        if cnt == 0: 
-            # compute the original estimated 3D point of the tracker 
-            Pplus = np.linalg.pinv(odom.P) 
-            homogenous_pix = np.ones((3, 1)) 
-            homogenous_pix[:2, :] = tracker.points.T 
-            orig_coord = (Pplus @ homogenous_pix).T[0]
-            orig_coord = orig_coord[:3]/orig_coord[3] 
-            print(orig_coord) 
+        err = odom.compute_odometry(img) 
 
-        # compute ray 
-        M, p4 = odom.P[:, :3], np.expand_dims(odom.P[:, 3], axis=-1) 
-        track_pts = np.ones((3, 1)) 
-        track_pts[:2, :] = tracker.points.T 
-        mu = 5
-        Minv = np.linalg.inv(M) 
-        ray = Minv @ (mu * track_pts - p4) 
-        #print(Minv @ p4) 
-        #print(ray) 
-        #print(odom.R) 
-        #print(odom.t) 
-        #print(odom.P) 
-        print(tracker.points[0] - center, 720) 
-        print(ray) 
-        break 
-        x_ang, y_ang = get_angles(ray.T[0][:3], False) 
-        r = 30 
+        # print(odom.n_features) 
+        ray_3d, ray_pixel = estimate_ray_with_proj(odom.P, tracker.points, odom.focal_len)
+        x_ang, y_ang = get_angles(ray_3d[:3], False) 
         draw_points(img, tracker.points) 
-        draw_arrows(img, center, center + np.array([r*np.cos(x_ang), r*np.sin(x_ang)]))
-        cv2.putText(img, f"{ray}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
-        cv2.putText(img, "x angle: " + str(x_ang), (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
-        cv2.putText(img, "z angle: " + str(y_ang), (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
+        draw_arrows(img, center, center + ray_pixel[:2])
+        # draw_arrows(img, center, center + np.array([r*np.cos(x_ang), r*np.sin(x_ang)]))
+        cv2.putText(img, f"{err}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
+        # cv2.putText(img, f"{ray}", ())
+        # cv2.putText(img, "x angle: " + str(x_ang), (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
+        # cv2.putText(img, "z angle: " + str(y_ang), (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
         out.write(img) 
         cv2.imshow("WINDOW_NAME", img) 
         cv2.waitKey(1) 
-        cnt += 1 
 
     vid.release() 
     out.release() 

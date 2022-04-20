@@ -12,7 +12,8 @@ Basic Idea:
 import glob 
 
 import cv2 
-import numpy as np 
+import numpy as np
+from sklearn.preprocessing import scale 
 
 """ 
 Dev note: 
@@ -75,6 +76,25 @@ def get_intrinsics_from_checker(img_dir: str, board_dims: tuple=(7, 6)):
 
     return mat, dist, rvecs, tvecs, objp, imgp
 
+def estimate_ray_with_proj(P: np.ndarray, point: np.ndarray, focal_len: float, mu: float = 100): 
+    """Given a projection matrix and 2D point on image plane, compute the 3D vector."""
+    M, p4 = P[:, :3], np.expand_dims(P[:, 3], axis=-1) 
+    track_pts = np.ones((3, 1))
+    track_pts[:2, :] = point.T 
+
+    # compute 3D ray estimation 
+    Minv = np.linalg.inv(M)
+    ray = Minv @ (mu * track_pts - p4)
+    ray = ray.T[0]
+    
+    # scale x and y vectors according to the ratio of focal length and computed z vector 
+    scaled_ray = np.zeros((3, 1))
+    scaled_ray[:2] = np.expand_dims(ray[:2] * focal_len / ray[-1], axis=1) 
+    scaled_ray[2] = focal_len 
+    scaled_ray = scaled_ray.T[0] 
+    
+    return ray, scaled_ray 
+
 class Odometry(object): 
     """
     Note
@@ -86,7 +106,8 @@ class Odometry(object):
         init_img: np.ndarray, 
         focal_len: float, 
         cam_center: np.ndarray, 
-        min_features: int = 100, 
+        error_thresh: float = 1.8, 
+        min_features: int = 2000, 
         lk_params: dict = dict(winSize=(32, 32), maxLevel=8, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 9, 0.02555)), 
         detector: cv2.FastFeatureDetector = cv2.FastFeatureDetector_create(threshold=25, nonmaxSuppression=True)
     ): 
@@ -97,6 +118,7 @@ class Odometry(object):
             self.prev_frame = init_img
         self.focal_len = focal_len
         self.cam_center = cam_center 
+        self.error_thresh = error_thresh 
         self.min_features = min_features
         self.lk_params = lk_params
         self.detector = detector 
@@ -138,6 +160,7 @@ class Odometry(object):
         
         # compute optical flow 
         p1, status, error = cv2.calcOpticalFlowPyrLK(self.prev_frame, img, self.p0, None, **self.lk_params)
+        sqrt_error = np.math.sqrt(error[status==1].mean())
 
         # extract the effective feature points from p0 and computed p1 
         p0_extracted = np.expand_dims(self.p0[status == 1], axis=1) 
@@ -152,20 +175,25 @@ class Odometry(object):
                                     0.999, 
                                     1.0, 
                                     None) 
-        
+
         # compute rotation matrix and translation vector 
-        _, self.R, self.t, _ = cv2.recoverPose(E, 
+        _, R, t, _ = cv2.recoverPose(E, 
                                             p0_extracted, 
                                             p1_extracted, 
                                             R=self.R, t=self.t, 
                                             focal=self.focal_len, 
                                             pp=self.cam_center, 
                                             mask=None) 
-        
-        # print(self.R, self.t) 
+         
         # Update number of extracted features 
+        if sqrt_error > self.error_thresh or self.img_idx < 1: 
+            # update camera matrix and related matrices 
+            self.Rt[:, :3] = R @ self.R 
+            self.Rt[:, 3] = self.t[:, 0] + self.R @ t[:, 0]
+            self.R = self.Rt[:, :3]
+            self.t = np.expand_dims(self.Rt[:, 3], axis=1)   
+            self.P = self.K @ self.Rt
+        
         self.n_features = p1_extracted.shape[0]
-        # update camera matrix and related matrices 
-        self.Rt[:, :3] = self.R 
-        self.Rt[:, 3] = self.t[:, 0]  
-        self.P = self.K @ self.Rt
+        self.prev_frame = img 
+        self.img_idx += 1 
