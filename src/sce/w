@@ -12,8 +12,7 @@ Basic Idea:
 import glob 
 
 import cv2 
-import numpy as np
-from sklearn.preprocessing import scale 
+import numpy as np 
 
 """ 
 Dev note: 
@@ -67,7 +66,7 @@ def get_intrinsics_from_checker(img_dir: str, board_dims: tuple=(7, 6)):
             ##### Plot for debug purpose #####
             cv2.drawChessboardCorners(img, board_dims, refined_corners, ret) 
             cv2.imshow("test", img) 
-            cv2.waitKey(0) 
+            cv2.watiKey(0) 
         
     cv2.destroyAllWindows() 
 
@@ -75,25 +74,6 @@ def get_intrinsics_from_checker(img_dir: str, board_dims: tuple=(7, 6)):
     ret, mat, dist, rvecs, tvecs = cv2.calibrateCamera(objp, imgp, gray.shape[::-1], None, None) 
 
     return mat, dist, rvecs, tvecs, objp, imgp
-
-def estimate_ray_with_proj(P: np.ndarray, point: np.ndarray, focal_len: float, mu: float = 100): 
-    """Given a projection matrix and 2D point on image plane, compute the 3D vector."""
-    M, p4 = P[:, :3], np.expand_dims(P[:, 3], axis=-1) 
-    track_pts = np.ones((3, 1))
-    track_pts[:2, :] = point.T 
-
-    # compute 3D ray estimation 
-    Minv = np.linalg.inv(M)
-    ray = Minv @ (mu * track_pts - p4)
-    ray = ray.T[0]
-    
-    # scale x and y vectors according to the ratio of focal length and computed z vector 
-    scaled_ray = np.zeros((3, 1))
-    scaled_ray[:2] = np.expand_dims(ray[:2] * focal_len / ray[-1], axis=1) 
-    scaled_ray[2] = focal_len 
-    scaled_ray = scaled_ray.T[0] 
-    
-    return ray, scaled_ray 
 
 class Odometry(object): 
     """
@@ -105,8 +85,7 @@ class Odometry(object):
         self, 
         init_img: np.ndarray, 
         focal_len: float, 
-        cam_center: np.ndarray, 
-        error_thresh: float = 1.8, 
+        cam_center: tuple, 
         min_features: int = 2000, 
         lk_params: dict = dict(winSize=(32, 32), maxLevel=8, criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 9, 0.02555)), 
         detector: cv2.FastFeatureDetector = cv2.FastFeatureDetector_create(threshold=25, nonmaxSuppression=True)
@@ -118,7 +97,6 @@ class Odometry(object):
             self.prev_frame = init_img
         self.focal_len = focal_len
         self.cam_center = cam_center 
-        self.error_thresh = error_thresh 
         self.min_features = min_features
         self.lk_params = lk_params
         self.detector = detector 
@@ -141,7 +119,7 @@ class Odometry(object):
         
     def _detect(self, img: np.ndarray): 
         # detect the feature points 
-        fp = self.detector.detect(img)
+        fp = self.detector.detect(self.img)
         return np.array([x.pt for x in fp], dtype=np.float32).reshape(-1, 1, 2)
     
     def compute_odometry(self, img: np.ndarray): 
@@ -156,15 +134,14 @@ class Odometry(object):
 
         # extract features 
         if self.n_features < self.min_features: 
-            self.p0 = self._detect(self.prev_frame) 
+            self.p0 = self.detector(self.pre_frame) 
         
         # compute optical flow 
         p1, status, error = cv2.calcOpticalFlowPyrLK(self.prev_frame, img, self.p0, None, **self.lk_params)
-        sqrt_error = np.math.sqrt(error[status==1].mean())
 
         # extract the effective feature points from p0 and computed p1 
-        p0_extracted = np.expand_dims(self.p0[status == 1], axis=1) 
-        p1_extracted = np.expand_dims(p1[status == 1], axis=1) 
+        p0_extracted = self.p0[status == 1]
+        p1_extracted = p1[status == 1]
 
         # compute essential matrix and extrinsic parameters 
         E, _ = cv2.findEssentialMat(p1_extracted, 
@@ -175,25 +152,37 @@ class Odometry(object):
                                     0.999, 
                                     1.0, 
                                     None) 
-
-        # compute rotation matrix and translation vector 
-        _, R, t, _ = cv2.recoverPose(E, 
+        # compute rotational matrix and translation vector 
+        _, self.R, self.t, _ = cv2.recoverPose(E, 
                                             p0_extracted, 
                                             p1_extracted, 
-                                            R=self.R, t=self.t, 
-                                            focal=self.focal_len, 
-                                            pp=self.cam_center, 
-                                            mask=None) 
-         
-        # Update number of extracted features 
-        if sqrt_error > self.error_thresh or self.img_idx < 1: 
-            # update camera matrix and related matrices 
-            self.Rt[:, :3] = R @ self.R 
-            self.Rt[:, 3] = self.t[:, 0] + self.R @ t[:, 0]
-            self.R = self.Rt[:, :3]
-            self.t = np.expand_dims(self.Rt[:, 3], axis=1)   
-            self.P = self.K @ self.Rt
+                                            self.R, self.t, 
+                                            self.focal_len, 
+                                            self.cam_center, 
+                                            None)
         
+        # Update number of extracted features 
         self.n_features = p1_extracted.shape[0]
-        self.prev_frame = img 
-        self.img_idx += 1 
+        # update camera matrix and related matrices 
+        self.Rt[:, :3] = self.R 
+        self.Rt[:, 3] = self.t 
+        self.P = self.K @ self.Rt
+
+if __name__ == "__main__": 
+    # compute camera calibration
+    directory = "../../data/checker/" 
+    # mat, dist, rvecs, tvecs, objp, imgp = get_intrinsics_from_checker(directory) 
+    # print(mat) 
+    # print(dist) 
+    
+    ##### For test purpose, we use the known intrinsic params ##### 
+    FOCAL = 710 
+    IN_DEGREE = True 
+    VID_PATH = "../../data/test_vid/test.mp4"
+    OUT_PATH = "../../data/test_vid/odometer_test_out.mp4" 
+    WINDOW_NAME = "Test"
+
+    # read image video 
+    vid = cv2.VideoCapture(VID_PATH) 
+    
+    # initialize odometer
