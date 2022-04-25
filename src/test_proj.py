@@ -52,7 +52,7 @@ if __name__ == "__main__":
         draw_points(img, tracker.points) 
         draw_arrows(img, center, center + ray_pixel[:2])
         # draw_arrows(img, center, center + np.array([r*np.cos(x_ang), r*np.sin(x_ang)]))
-        cv2.putText(img, f"{err}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
+        # cv2.putText(img, f"{err}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
         # cv2.putText(img, f"{ray}", ())
         # cv2.putText(img, "x angle: " + str(x_ang), (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)
         # cv2.putText(img, "z angle: " + str(y_ang), (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 1, cv2.LINE_AA)

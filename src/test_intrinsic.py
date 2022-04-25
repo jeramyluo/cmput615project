@@ -7,5 +7,3 @@ if __name__ == "__main__":
     mat, dist, rvecs, tvecs, objp, imgp = get_intrinsics_from_checker(img_dir, (8, 6)) 
     np.save("robot_intrinsic.npy", mat) 
     print(mat) 
-    print(rvecs) 
-    print(tvecs) 
