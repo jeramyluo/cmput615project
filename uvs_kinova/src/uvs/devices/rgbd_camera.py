@@ -11,7 +11,7 @@ import cv2
 import rospy
 from cv_bridge import CvBridge, CvBridgeError
 from sensor_msgs.msg import Image
-from utils import draw_points
+from utils import draw_points, draw_arrows
 
 class RGBDVision(object):
     """Interact with any camera w/ topics published to ROS.
@@ -83,9 +83,12 @@ class RGBDVision(object):
 
         # imshow
         if self.tracker is not None:
-            gray = cv2.cvtColor(data['vis'], cv2.COLOR_BGR2RGB)
-            self.tracker.update_tracker(gray)
+            gray = cv2.cvtColor(data['vis'], cv2.COLOR_BGR2GRAY)
+            self.tracker.update_tracker(gray) 
             draw_points(data['vis'], self.tracker.points, color=(0, 0, 255))
+            center = np.array([320, 240], dtype=float)
+            center = np.expand_dims(center, axis=0)
+            draw_arrows(data["vis"], center, self.tracker.points) 
 
         cv2.imshow("{} RGB".format(self.name), data['vis'])
         if self.depth is not None: cv2.imshow("{} Depth".format(self.name), np.uint8(self.depth))
