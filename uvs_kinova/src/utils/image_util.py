@@ -163,7 +163,7 @@ def draw_arrows(img: np.ndarray, start_pts: np.ndarray, end_pts: np.ndarray, col
         end_pts = np.expand_dims(end_pts, axis=0) 
 
     for i in range(start_pts.shape[0]): 
-        cv2.arrowedLine(img, start_pts[i, :].astype(int), end_pts[i, :].astype(int), color=color, thickness=thickness)
+        cv2.arrowedLine(img, tuple(start_pts[i, :].astype(int)), tuple(end_pts[i, :].astype(int)), color=color, thickness=thickness)
     
 def get_angles(ray: np.ndarray, to_degree: bool = True): 
     """Compute angles in both x, y directions with respect to principal axis (i.e. axis perpendicular to image plane). 
