@@ -5,7 +5,7 @@ import glob
 import cv2 
 import pandas as pd 
 
-from sce import compute_focal_length
+from uvs.sce import compute_focal_length
 from utils import Tracker 
 
 DATA_DIR = "../data/"

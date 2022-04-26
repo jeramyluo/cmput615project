@@ -3,7 +3,7 @@ import glob
 import cv2 
 import numpy as np 
 
-from sce import estimate_ray_with_focal 
+from uvs.sce import estimate_ray_with_focal 
 from utils import Tracker, draw_points, draw_arrows, get_angles 
 
 FOCAL = 710 
