@@ -37,5 +37,5 @@ If you noticed any bugs, please let us know or post an issue for it.
 ## Coding credits
 | Directory | Author | Description | 
 | --------- | ------ | ----------- | 
-| src/ | Haruto Tanaka | Source code for the vision part. Including tracker class, focal length estimation, visual odometry class, and so on | 
+| src/, uvs_kinova/src/vs/ and uvs_kinova/src/main.py  | Haruto Tanaka | Source code for the vision part. Including tracker class, focal length estimation, visual odometry class, and so on. | 
 | uvs_kinova/ | Jeramy Luo | Source code for the visual servoing part. Including robot control, waypoint estimation, and so on | 
